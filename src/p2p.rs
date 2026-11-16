@@ -27,6 +27,8 @@ pub async fn share(
     store: &mut Store,
     direct_only: bool,
     confirm_pairing: bool,
+    ticket_out: Option<&std::path::Path>,
+    qr: bool,
 ) -> Result<SyncReport> {
     let endpoint = bind_endpoint(store, direct_only).await?;
     let address = current_address(&endpoint, direct_only).await?;
@@ -44,7 +46,16 @@ pub async fn share(
         direct_only,
     };
     let encoded = encode_ticket(&ticket)?;
-    println!("workmesh join {encoded}");
+    let command = format!("workmesh join {encoded}");
+    println!("{command}");
+    if let Some(path) = ticket_out {
+        write_ticket_file(path, &encoded)?;
+        println!("Ticket written to {}; delete it after use.", path.display());
+    }
+    if qr {
+        println!("{}", qrcode::QrCode::new(command)?.render::<char>().build());
+        println!("Scan this QR code only over a trusted path; it can request one workspace join.");
+    }
     println!("Waiting for one peer; press Ctrl-C to cancel.");
     let report = accept_loop(store, &endpoint, direct_only, true, confirm_pairing).await;
     endpoint.close().await;
@@ -176,6 +187,22 @@ pub fn decode_ticket(value: &str) -> Result<Ticket> {
 
 fn encode_ticket(ticket: &Ticket) -> Result<String> {
     Ok(base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(serde_json::to_vec(ticket)?))
+}
+
+fn write_ticket_file(path: &std::path::Path, ticket: &str) -> Result<()> {
+    use std::fs::OpenOptions;
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)
+        .with_context(|| format!("create ticket file {}", path.display()))?;
+    writeln!(file, "{ticket}")?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
+    }
+    Ok(())
 }
 
 async fn bind_endpoint(store: &mut Store, direct_only: bool) -> Result<Endpoint> {

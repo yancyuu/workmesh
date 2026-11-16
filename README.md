@@ -76,6 +76,36 @@ Stop the background daemon with:
 workmesh stop
 ```
 
+## Sharing a pairing ticket
+
+The default workflow is to copy the printed one-line command from one terminal to the other:
+
+```bash
+workmesh join eyJ2ZXJzaW9uIjox...
+```
+
+For a file-based transfer over `scp`, AirDrop, a password manager, or another encrypted channel:
+
+```bash
+# Machine A
+workmesh share --ticket-out /tmp/workmesh-ticket
+
+# Machine B
+mkdir ~/work/my-project && cd ~/work/my-project
+workmesh join --ticket-file /tmp/workmesh-ticket --target .
+rm /tmp/workmesh-ticket
+```
+
+The ticket file is created with owner-only permissions and contains only the ticket, not workspace data. Delete it after use.
+
+When the other device is nearby, render a QR code in the terminal:
+
+```bash
+workmesh share --qr
+```
+
+The QR code encodes the complete `workmesh join ...` command. Scan it only over a trusted path: a ticket is a bearer invitation until it expires or is redeemed.
+
 ## Keys, pairing, and recovery
 
 You do not create, remember, or type a password.
@@ -119,8 +149,8 @@ Daily commands:
 
 | Command | Purpose |
 |---|---|
-| `workmesh share` | Initialize if needed, checkpoint, print a one-time join ticket, confirm the joining device, and serve one peer |
-| `workmesh join` | Pair, synchronize, and materialize a shared workspace |
+| `workmesh share` | Initialize if needed, checkpoint, print a one-time join ticket, confirm the joining device, and serve one peer; supports `--ticket-out` and `--qr` |
+| `workmesh join` | Pair, synchronize, and materialize a shared workspace; accepts a positional ticket or `--ticket-file` |
 | `workmesh start` | Start automatic checkpoints and background synchronization |
 | `workmesh stop` | Stop the background daemon |
 | `workmesh sync` | Exchange all missing objects with paired peers now |

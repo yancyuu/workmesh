@@ -30,10 +30,16 @@ enum Command {
         direct_only: bool,
         #[arg(long)]
         yes: bool,
+        #[arg(long)]
+        ticket_out: Option<PathBuf>,
+        #[arg(long)]
+        qr: bool,
     },
     /// Join a workspace using the ticket printed by `workmesh share`.
     Join {
-        ticket: String,
+        ticket: Option<String>,
+        #[arg(long, conflicts_with = "ticket")]
+        ticket_file: Option<PathBuf>,
         #[arg(long, default_value = ".")]
         target: PathBuf,
     },
@@ -158,7 +164,12 @@ pub async fn run(cli: Cli) -> Result<()> {
             println!("Event {}", short(&hash));
             Ok(())
         }
-        Command::Share { direct_only, yes } => {
+        Command::Share {
+            direct_only,
+            yes,
+            ticket_out,
+            qr,
+        } => {
             let mut store = open_or_init(&current)?;
             let (hash, capture) = store.checkpoint(None, None, None, true)?;
             print_capture(&hash, &capture);
@@ -167,7 +178,7 @@ pub async fn run(cli: Cli) -> Result<()> {
                 created_at: Utc::now(),
             });
             store.save_config()?;
-            let result = p2p::share(&mut store, direct_only, !yes).await;
+            let result = p2p::share(&mut store, direct_only, !yes, ticket_out.as_deref(), qr).await;
             store.config_mut().pairing = None;
             store.save_config()?;
             let report = result?;
@@ -176,8 +187,22 @@ pub async fn run(cli: Cli) -> Result<()> {
             println!("Run `workmesh start` on both machines for automatic synchronization.");
             Ok(())
         }
-        Command::Join { ticket, target } => {
-            let ticket = p2p::decode_ticket(&ticket)?;
+        Command::Join {
+            ticket,
+            ticket_file,
+            target,
+        } => {
+            let ticket_text = if let Some(ticket) = ticket {
+                ticket
+            } else if let Some(path) = ticket_file {
+                fs::read_to_string(&path)
+                    .with_context(|| format!("read ticket file {}", path.display()))?
+                    .trim()
+                    .to_owned()
+            } else {
+                bail!("provide a ticket or --ticket-file");
+            };
+            let ticket = p2p::decode_ticket(&ticket_text)?;
             ensure_join_target(&target)?;
             let mut store = Store::init(&target)?;
             store.config_mut().repo_id = ticket.repo_id.clone();
