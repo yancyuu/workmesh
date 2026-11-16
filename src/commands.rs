@@ -168,6 +168,7 @@ pub async fn run(cli: Cli) -> Result<()> {
             store.save_config()?;
             let report = result?;
             print_report(&report);
+            println!("Pairing credentials were saved automatically in .workmesh/config.json.");
             println!("Run `workmesh start` on both machines for automatic synchronization.");
             Ok(())
         }
@@ -182,6 +183,7 @@ pub async fn run(cli: Cli) -> Result<()> {
             store.set_local_head(&ticket.checkpoint)?;
             print_report(&report);
             println!("Materialized {files} files in {}", store.root().display());
+            println!("Pairing credentials were saved automatically in .workmesh/config.json.");
             println!("Run `workmesh start` on both machines for automatic synchronization.");
             Ok(())
         }

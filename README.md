@@ -76,6 +76,29 @@ Stop the background daemon with:
 workmesh stop
 ```
 
+## Keys, pairing, and recovery
+
+You do not create, remember, or type a password.
+
+- A pairing ticket is valid for one successful join and expires after ten minutes.
+- After `join` succeeds, both devices save the peer identity, address, and token automatically in `.workmesh/config.json`.
+- Later `workmesh sync`, `workmesh start`, and incoming peer connections use those saved credentials automatically.
+- The ticket is not needed again after pairing.
+- If a ticket expires before it is used, run `workmesh share` again on an already-paired device.
+
+To add or recover a machine, use any surviving paired machine:
+
+```bash
+# On a machine that still has .workmesh/
+workmesh stop
+workmesh share
+
+# On the new or recovered machine
+workmesh join <new-ticket> --target .
+```
+
+If a device is lost, treat its saved credentials as compromised until you stop using that peer. There is intentionally no hosted account service that can recover a key for you. Keep at least one always-on trusted peer, such as a home server or NAS, or keep an encrypted backup of `.workmesh/` if losing every device would be unacceptable.
+
 ## Commands
 
 Daily commands:
