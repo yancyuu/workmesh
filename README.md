@@ -15,6 +15,12 @@ AI coding agents change files in many small steps, explore dead ends, and often 
 
 `workmesh` adds that missing local-first layer without replacing Git.
 
+## Agent skill
+
+Coding agents should read [skills/workmesh/SKILL.md](skills/workmesh/SKILL.md) before operating WorkMesh. It contains the supported command flows, pairing authorization rules, Git boundaries, and failure recovery procedures.
+
+To install it for a compatible agent, copy `skills/workmesh/` into that agent's skill directory (for example, a project's `.agents/skills/workmesh/` or `.claude/skills/workmesh/`). If the agent does not support skill discovery, ask it to read the file directly. The skill does not install WorkMesh or grant permission to share data.
+
 ## Install
 
 From source:
