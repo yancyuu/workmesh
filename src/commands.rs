@@ -28,6 +28,8 @@ enum Command {
     Share {
         #[arg(long)]
         direct_only: bool,
+        #[arg(long)]
+        yes: bool,
     },
     /// Join a workspace using the ticket printed by `workmesh share`.
     Join {
@@ -51,6 +53,8 @@ enum Command {
     },
     /// Show workspace, peer, and daemon status.
     Status,
+    /// Remove a paired device on this machine.
+    Unpair { peer: String },
     /// Show checkpoint history, or agent events with --events.
     Log {
         #[arg(long)]
@@ -154,7 +158,7 @@ pub async fn run(cli: Cli) -> Result<()> {
             println!("Event {}", short(&hash));
             Ok(())
         }
-        Command::Share { direct_only } => {
+        Command::Share { direct_only, yes } => {
             let mut store = open_or_init(&current)?;
             let (hash, capture) = store.checkpoint(None, None, None, true)?;
             print_capture(&hash, &capture);
@@ -163,7 +167,7 @@ pub async fn run(cli: Cli) -> Result<()> {
                 created_at: Utc::now(),
             });
             store.save_config()?;
-            let result = p2p::share(&mut store, direct_only).await;
+            let result = p2p::share(&mut store, direct_only, !yes).await;
             store.config_mut().pairing = None;
             store.save_config()?;
             let report = result?;
@@ -178,7 +182,13 @@ pub async fn run(cli: Cli) -> Result<()> {
             let mut store = Store::init(&target)?;
             store.config_mut().repo_id = ticket.repo_id.clone();
             store.save_config()?;
-            let report = p2p::join(&mut store, &ticket).await?;
+            let report = match p2p::join(&mut store, &ticket).await {
+                Ok(report) => report,
+                Err(error) => {
+                    store.remove_peer(&ticket.address.id)?;
+                    return Err(error);
+                }
+            };
             let files = store.export(&ticket.checkpoint, &target)?;
             store.set_local_head(&ticket.checkpoint)?;
             print_report(&report);
@@ -310,8 +320,9 @@ pub async fn run(cli: Cli) -> Result<()> {
             println!("Checkpoints: {}", store.checkpoints()?.len());
             for (id, peer) in &store.config().peers {
                 println!(
-                    "Peer {}: head={}, last_sync={}",
-                    short(id),
+                    "Peer {}: device={}, head={}, last_sync={}",
+                    id,
+                    peer.device_id,
                     peer.head
                         .as_deref()
                         .map(short)
@@ -323,6 +334,13 @@ pub async fn run(cli: Cli) -> Result<()> {
             }
             let root = current.clone();
             tokio::task::spawn_blocking(move || crate::daemon::status(&root)).await??;
+            Ok(())
+        }
+        Command::Unpair { peer } => {
+            let mut store = Store::open(&current)?;
+            let removed = store.remove_peer(&peer)?;
+            println!("Unpaired device {} ({})", removed.device_id, peer);
+            println!("Run `workmesh unpair` on every surviving trusted device.");
             Ok(())
         }
         Command::Export { checkpoint, target } => {

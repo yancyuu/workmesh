@@ -81,10 +81,15 @@ workmesh stop
 You do not create, remember, or type a password.
 
 - A pairing ticket is valid for one successful join and expires after ten minutes.
-- After `join` succeeds, both devices save the peer identity, address, and token automatically in `.workmesh/config.json`.
+- When someone redeems the ticket, the machine running `workmesh share` shows the requesting device name, device ID, and endpoint ID, then asks for confirmation.
+- Only after you answer `y` can that device join.
+- For scripts and automation, `workmesh share --yes` skips this interactive confirmation; use it only where the ticket channel is trusted.
+- After `join` succeeds, both devices rotate the one-time ticket into a saved peer credential in `.workmesh/config.json`.
 - Later `workmesh sync`, `workmesh start`, and incoming peer connections use those saved credentials automatically.
-- The ticket is not needed again after pairing.
+- The ticket is not needed again after pairing and cannot be reused after a successful join.
 - If a ticket expires before it is used, run `workmesh share` again on an already-paired device.
+
+A ticket is still a bearer credential before redemption: anyone who has it can request to join. Send tickets only over a channel you trust, and reject the confirmation prompt if an unexpected device name or endpoint ID appears.
 
 To add or recover a machine, use any surviving paired machine:
 
@@ -97,7 +102,16 @@ workmesh share
 workmesh join <new-ticket> --target .
 ```
 
-If a device is lost, treat its saved credentials as compromised until you stop using that peer. There is intentionally no hosted account service that can recover a key for you. Keep at least one always-on trusted peer, such as a home server or NAS, or keep an encrypted backup of `.workmesh/` if losing every device would be unacceptable.
+If a device is lost or no longer trusted:
+
+```bash
+workmesh stop
+workmesh status           # copy the full endpoint ID shown as Peer <id>
+workmesh unpair <endpoint-id>
+workmesh start
+```
+
+Run `workmesh unpair` on every surviving trusted device. There is intentionally no hosted account service that can recover or revoke keys globally. Keep at least one always-on trusted peer, such as a home server or NAS, or keep an encrypted backup of `.workmesh/` if losing every device would be unacceptable.
 
 ## Commands
 
@@ -105,12 +119,13 @@ Daily commands:
 
 | Command | Purpose |
 |---|---|
-| `workmesh share` | Initialize if needed, checkpoint, print a one-time join ticket, and serve one peer |
+| `workmesh share` | Initialize if needed, checkpoint, print a one-time join ticket, confirm the joining device, and serve one peer |
 | `workmesh join` | Pair, synchronize, and materialize a shared workspace |
 | `workmesh start` | Start automatic checkpoints and background synchronization |
 | `workmesh stop` | Stop the background daemon |
 | `workmesh sync` | Exchange all missing objects with paired peers now |
-| `workmesh status` | Show workspace, peers, synchronization times, and daemon state |
+| `workmesh status` | Show workspace, full peer IDs, synchronization times, and daemon state |
+| `workmesh unpair` | Remove a paired device from this machine |
 | `workmesh log` | Show checkpoint history; `--events` shows the agent event DAG |
 
 Advanced commands remain available for scripts and harnesses:

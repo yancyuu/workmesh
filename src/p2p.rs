@@ -1,4 +1,5 @@
 use std::collections::BTreeSet;
+use std::io::{self, Write};
 use std::str::FromStr;
 use std::time::Duration;
 
@@ -22,7 +23,11 @@ use crate::{ALPN, FORMAT_VERSION, MAX_FRAME_SIZE};
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(45);
 const SYNC_TIMEOUT: Duration = Duration::from_secs(300);
 
-pub async fn share(store: &mut Store, direct_only: bool) -> Result<SyncReport> {
+pub async fn share(
+    store: &mut Store,
+    direct_only: bool,
+    confirm_pairing: bool,
+) -> Result<SyncReport> {
     let endpoint = bind_endpoint(store, direct_only).await?;
     let address = current_address(&endpoint, direct_only).await?;
     let pairing = store
@@ -41,7 +46,7 @@ pub async fn share(store: &mut Store, direct_only: bool) -> Result<SyncReport> {
     let encoded = encode_ticket(&ticket)?;
     println!("workmesh join {encoded}");
     println!("Waiting for one peer; press Ctrl-C to cancel.");
-    let report = accept_loop(store, &endpoint, direct_only, true).await;
+    let report = accept_loop(store, &endpoint, direct_only, true, confirm_pairing).await;
     endpoint.close().await;
     report
 }
@@ -50,7 +55,7 @@ pub async fn serve(store: &mut Store, direct_only: bool) -> Result<()> {
     let endpoint = bind_endpoint(store, direct_only).await?;
     println!("Serving {} as {}", store.config().repo_id, endpoint.id());
     println!("Press Ctrl-C to stop.");
-    let result = accept_loop(store, &endpoint, direct_only, false).await;
+    let result = accept_loop(store, &endpoint, direct_only, false, false).await;
     endpoint.close().await;
     result.map(|_| ())
 }
@@ -70,7 +75,7 @@ pub async fn daemon_loop(store: &mut Store, interval: Duration) -> Result<()> {
             incoming = endpoint.accept() => {
                 let incoming = incoming.context("endpoint closed")?;
                 let connection = incoming.await.context("failed to accept peer")?;
-                match timeout(SYNC_TIMEOUT, run_server(store, &endpoint, &connection, direct_only)).await {
+                match timeout(SYNC_TIMEOUT, run_server(store, &endpoint, &connection, direct_only, false)).await {
                     Ok(Ok(report)) => {
                         connection.close(0u32.into(), b"done");
                         if let Some(head) = &report.remote_head
@@ -222,13 +227,14 @@ async fn accept_loop(
     endpoint: &Endpoint,
     direct_only: bool,
     once: bool,
+    confirm_pairing: bool,
 ) -> Result<SyncReport> {
     loop {
         let incoming = endpoint.accept().await.context("endpoint closed")?;
         let connection = incoming.await.context("failed to accept peer")?;
         match timeout(
             SYNC_TIMEOUT,
-            run_server(store, endpoint, &connection, direct_only),
+            run_server(store, endpoint, &connection, direct_only, confirm_pairing),
         )
         .await
         {
@@ -260,6 +266,7 @@ async fn run_client(
             version: FORMAT_VERSION,
             repo_id: store.config().repo_id.clone(),
             device_id: store.config().device_id.clone(),
+            device_name: store.config().device_name.clone(),
             token: token.to_owned(),
             address: local_address,
             head: store.local_head(),
@@ -271,6 +278,18 @@ async fn run_client(
     if ack.version != FORMAT_VERSION || ack.address.id != server_address.id {
         bail!("peer returned an invalid handshake");
     }
+    store.set_peer(
+        server_address.id.clone(),
+        Peer {
+            device_id: ack.device_id.clone(),
+            address: ack.address.clone(),
+            token: ack.session_token.clone(),
+            head: None,
+            event_head: ack.event_head.clone(),
+            last_sync: None,
+            direct_only,
+        },
+    )?;
 
     let local_inventory = Inventory {
         objects: store.list_objects()?,
@@ -291,7 +310,7 @@ async fn run_client(
         Peer {
             device_id: ack.device_id,
             address: ack.address,
-            token: token.to_owned(),
+            token: ack.session_token,
             head: remote_inventory.head.clone(),
             event_head: ack.event_head,
             last_sync: Some(Utc::now()),
@@ -310,6 +329,7 @@ async fn run_server(
     endpoint: &Endpoint,
     connection: &iroh::endpoint::Connection,
     direct_only: bool,
+    confirm_pairing: bool,
 ) -> Result<SyncReport> {
     let (mut send, mut recv) = connection.accept_bi().await?;
     let hello: Hello = recv_json(&mut recv).await?;
@@ -334,12 +354,20 @@ async fn run_server(
     if !paired && !pairing {
         bail!("peer authentication failed");
     }
+    if pairing && confirm_pairing && !confirm_new_peer(&hello, &remote_id)? {
+        bail!("pairing request rejected");
+    }
+    let session_token = if pairing {
+        Store::random_token()
+    } else {
+        hello.token.clone()
+    };
     store.set_peer(
         remote_id.clone(),
         Peer {
             device_id: hello.device_id,
             address: hello.address,
-            token: hello.token,
+            token: session_token.clone(),
             head: hello.head,
             event_head: hello.event_head,
             last_sync: None,
@@ -355,6 +383,7 @@ async fn run_server(
             address: current_address(endpoint, direct_only).await?,
             head: store.local_head(),
             event_head: store.event_head(),
+            session_token,
         },
     )
     .await?;
@@ -386,6 +415,17 @@ async fn run_server(
         uploaded,
         remote_head: remote_inventory.head,
     })
+}
+
+fn confirm_new_peer(hello: &Hello, remote_id: &str) -> Result<bool> {
+    println!("Pairing request:");
+    println!("  Device: {} ({})", hello.device_name, hello.device_id);
+    println!("  Endpoint: {remote_id}");
+    print!("Allow this device to join this workspace? [y/N] ");
+    io::stdout().flush()?;
+    let mut answer = String::new();
+    io::stdin().read_line(&mut answer)?;
+    Ok(answer.trim().eq_ignore_ascii_case("y"))
 }
 
 fn missing(store: &Store, remote: &[String]) -> Result<Vec<String>> {

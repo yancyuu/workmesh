@@ -100,6 +100,7 @@ pub struct Hello {
     pub version: u32,
     pub repo_id: String,
     pub device_id: String,
+    pub device_name: String,
     pub token: String,
     pub address: WireAddress,
     pub head: Option<String>,
@@ -113,6 +114,7 @@ pub struct HelloAck {
     pub address: WireAddress,
     pub head: Option<String>,
     pub event_head: Option<String>,
+    pub session_token: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

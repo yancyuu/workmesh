@@ -389,6 +389,32 @@ impl Store {
         self.save_config()
     }
 
+    pub fn remove_peer(&mut self, prefix: &str) -> Result<Peer> {
+        if prefix.len() < 8 {
+            bail!("peer id prefix must contain at least 8 characters");
+        }
+        let matches = self
+            .config
+            .peers
+            .keys()
+            .filter(|id| id.starts_with(prefix))
+            .cloned()
+            .collect::<Vec<_>>();
+        match matches.len() {
+            0 => bail!("paired device not found: {prefix}"),
+            1 => {
+                let peer = self
+                    .config
+                    .peers
+                    .remove(&matches[0])
+                    .context("peer vanished")?;
+                self.save_config()?;
+                Ok(peer)
+            }
+            _ => bail!("peer id prefix is ambiguous: {prefix}"),
+        }
+    }
+
     pub fn export(&self, checkpoint: &str, target: &Path) -> Result<usize> {
         snapshot::materialize_empty(self, checkpoint, target)
     }
