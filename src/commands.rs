@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
@@ -14,7 +14,8 @@ use crate::store::Store;
 #[command(
     name = "aigit",
     version,
-    about = "Local-first P2P checkpoints for agent work"
+    about = "Local-first P2P checkpoints for agent work",
+    arg_required_else_help = true
 )]
 pub struct Cli {
     #[command(subcommand)]
@@ -23,29 +24,7 @@ pub struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
-    /// Initialize an agent workspace beside an optional Git repository.
-    Init,
-    /// Capture the current files and agent intent without creating a Git commit.
-    Checkpoint {
-        #[arg(long)]
-        intent: Option<String>,
-        #[arg(long)]
-        note: Option<String>,
-        #[arg(long)]
-        agent: Option<String>,
-    },
-    /// Append a prompt, tool call, decision, test result, or note to the agent event log.
-    Record {
-        #[arg(long)]
-        kind: String,
-        #[arg(long)]
-        text: String,
-        #[arg(long)]
-        agent: Option<String>,
-        #[arg(long)]
-        checkpoint: Option<String>,
-    },
-    /// Print a one-time join command and serve one peer.
+    /// Print a one-time join command and share this workspace with a peer.
     Share {
         #[arg(long)]
         direct_only: bool,
@@ -56,32 +35,67 @@ enum Command {
         #[arg(long, default_value = ".")]
         target: PathBuf,
     },
-    /// Accept synchronization requests from paired peers.
-    Serve {
-        #[arg(long)]
-        direct_only: bool,
+    /// Start automatic checkpoints and background synchronization.
+    Start {
+        #[arg(long, default_value_t = 10)]
+        interval_secs: u64,
     },
-    /// Synchronize missing objects with all paired peers.
+    /// Stop the background daemon.
+    Stop,
+    /// Synchronize missing objects with all paired peers now.
     Sync {
         #[arg(long)]
         direct_only: bool,
         #[arg(long)]
         peer: Option<String>,
     },
-    /// Show local and remote checkpoint history, or agent events with --events.
+    /// Show workspace, peer, and daemon status.
+    Status,
+    /// Show checkpoint history, or agent events with --events.
     Log {
         #[arg(long)]
         events: bool,
     },
-    /// Show workspace and peer synchronization status.
-    Status,
+    /// Initialize manually; `aigit share` also does this automatically.
+    #[command(hide = true)]
+    Init,
+    /// Capture the current files and agent intent without creating a Git commit.
+    #[command(hide = true)]
+    Checkpoint {
+        #[arg(long)]
+        intent: Option<String>,
+        #[arg(long)]
+        note: Option<String>,
+        #[arg(long)]
+        agent: Option<String>,
+    },
+    /// Append a prompt, tool call, decision, test result, or note to the agent event log.
+    #[command(hide = true)]
+    Record {
+        #[arg(long)]
+        kind: String,
+        #[arg(long)]
+        text: String,
+        #[arg(long)]
+        agent: Option<String>,
+        #[arg(long)]
+        checkpoint: Option<String>,
+    },
+    /// Accept synchronization requests from paired peers in the foreground.
+    #[command(hide = true)]
+    Serve {
+        #[arg(long)]
+        direct_only: bool,
+    },
     /// Materialize a checkpoint into a new or empty directory.
+    #[command(hide = true)]
     Export {
         checkpoint: String,
         #[arg(long)]
         target: PathBuf,
     },
-    /// Manage the background auto-checkpoint and sync daemon.
+    /// Low-level daemon controls.
+    #[command(hide = true)]
     Daemon {
         #[command(subcommand)]
         command: DaemonCommand,
@@ -121,7 +135,7 @@ pub async fn run(cli: Cli) -> Result<()> {
             note,
             agent,
         } => {
-            let mut store = Store::open(&current)?;
+            let mut store = open_or_init(&current)?;
             let (hash, capture) = store.checkpoint(intent, note, agent, false)?;
             print_capture(&hash, &capture);
             Ok(())
@@ -132,7 +146,7 @@ pub async fn run(cli: Cli) -> Result<()> {
             agent,
             checkpoint,
         } => {
-            let mut store = Store::open(&current)?;
+            let mut store = open_or_init(&current)?;
             let checkpoint = checkpoint
                 .map(|prefix| resolve_checkpoint(&store, &prefix))
                 .transpose()?;
@@ -141,7 +155,7 @@ pub async fn run(cli: Cli) -> Result<()> {
             Ok(())
         }
         Command::Share { direct_only } => {
-            let mut store = Store::open(&current)?;
+            let mut store = open_or_init(&current)?;
             let (hash, capture) = store.checkpoint(None, None, None, true)?;
             print_capture(&hash, &capture);
             store.config_mut().pairing = Some(PairingGrant {
@@ -154,6 +168,7 @@ pub async fn run(cli: Cli) -> Result<()> {
             store.save_config()?;
             let report = result?;
             print_report(&report);
+            println!("Run `aigit start` on both machines for automatic synchronization.");
             Ok(())
         }
         Command::Join { ticket, target } => {
@@ -167,7 +182,19 @@ pub async fn run(cli: Cli) -> Result<()> {
             store.set_local_head(&ticket.checkpoint)?;
             print_report(&report);
             println!("Materialized {files} files in {}", store.root().display());
+            println!("Run `aigit start` on both machines for automatic synchronization.");
             Ok(())
+        }
+        Command::Start { interval_secs } => {
+            let root = current.clone();
+            tokio::task::spawn_blocking(move || {
+                crate::daemon::start(&root, Duration::from_secs(interval_secs))
+            })
+            .await?
+        }
+        Command::Stop => {
+            let root = current.clone();
+            tokio::task::spawn_blocking(move || crate::daemon::stop(&root)).await?
         }
         Command::Serve { direct_only } => {
             let mut store = Store::open(&current)?;
@@ -292,6 +319,8 @@ pub async fn run(cli: Cli) -> Result<()> {
                         .unwrap_or_else(|| "never".into())
                 );
             }
+            let root = current.clone();
+            tokio::task::spawn_blocking(move || crate::daemon::status(&root)).await??;
             Ok(())
         }
         Command::Export { checkpoint, target } => {
@@ -324,6 +353,14 @@ pub async fn run(cli: Cli) -> Result<()> {
                 }
             }
         }
+    }
+}
+
+fn open_or_init(root: &Path) -> Result<Store> {
+    if root.join(".aigit/config.json").is_file() {
+        Store::open(root)
+    } else {
+        Store::init(root)
     }
 }
 

@@ -39,12 +39,10 @@ On the machine that currently has the project:
 
 ```bash
 cd ~/work/my-project
-aigit init
-aigit checkpoint --intent "before handoff"
 aigit share
 ```
 
-`share` prints a one-time command such as:
+`share` initializes `aigit` if needed, captures the current workspace, and prints a one-time command such as:
 
 ```text
 aigit join eyJ2ZXJzaW9uIjox...
@@ -62,32 +60,46 @@ The second machine receives the workspace snapshot, checkpoint history, and agen
 For automatic checkpoints and reconnection on both machines:
 
 ```bash
-aigit daemon start
+aigit start
 ```
 
 Check state with:
 
 ```bash
-aigit daemon status
 aigit status
 aigit sync
 ```
 
+Stop the background daemon with:
+
+```bash
+aigit stop
+```
+
 ## Commands
+
+Daily commands:
 
 | Command | Purpose |
 |---|---|
-| `aigit init` | Initialize `.aigit/` beside an optional Git repository |
+| `aigit share` | Initialize if needed, checkpoint, print a one-time join ticket, and serve one peer |
+| `aigit join` | Pair, synchronize, and materialize a shared workspace |
+| `aigit start` | Start automatic checkpoints and background synchronization |
+| `aigit stop` | Stop the background daemon |
+| `aigit sync` | Exchange all missing objects with paired peers now |
+| `aigit status` | Show workspace, peers, synchronization times, and daemon state |
+| `aigit log` | Show checkpoint history; `--events` shows the agent event DAG |
+
+Advanced commands remain available for scripts and harnesses:
+
+| Command | Purpose |
+|---|---|
+| `aigit init` | Initialize manually; `share` does this automatically |
 | `aigit checkpoint` | Capture all current files with optional intent, note, and agent |
 | `aigit record` | Append a prompt, tool call, decision, test result, or note |
-| `aigit share` | Print a one-time join ticket and serve one peer |
-| `aigit join` | Pair, synchronize, and materialize a shared workspace |
-| `aigit serve` | Continuously accept paired peers |
-| `aigit sync` | Exchange all missing objects with paired peers |
-| `aigit log` | Show checkpoint history; `--events` shows the agent event DAG |
-| `aigit status` | Show repository, head, peers, and last synchronization times |
+| `aigit serve` | Continuously accept paired peers in the foreground |
 | `aigit export` | Materialize a checkpoint into a new or empty directory |
-| `aigit daemon start/stop/status/run` | Manage automatic checkpoints and background synchronization |
+| `aigit daemon run/start/stop/status` | Low-level daemon controls |
 
 ## Offline and shutdown semantics
 
@@ -98,7 +110,7 @@ Every checkpoint is complete on the local machine before synchronization. If the
 3. the next `aigit sync` or daemon cycle exchanges only missing objects,
 4. both histories are preserved as parallel checkpoint branches.
 
-Nothing can retrieve data that exists only on a powered-off machine. For higher availability, run `aigit daemon` on an always-on NAS, home server, or work machine as another equal peer. No machine has special authority.
+Nothing can retrieve data that exists only on a powered-off machine. For higher availability, run `aigit start` on an always-on NAS, home server, or work machine as another equal peer. No machine has special authority.
 
 If both machines changed the same workspace while offline, both checkpoint histories synchronize and both working directories remain untouched. Use `aigit log`, `aigit export`, and your normal Git workflow to resolve the changes. `aigit` only fast-forwards a working directory when it is clean relative to its last checkpoint and the peer checkpoint is a descendant.
 
