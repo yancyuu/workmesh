@@ -23,6 +23,7 @@ pub fn capture(store: &Store) -> Result<Capture> {
     let mut skipped = Vec::new();
     let walker = WalkBuilder::new(&root)
         .hidden(false)
+        .add_custom_ignore_filename(".aigitignore")
         .git_ignore(true)
         .git_exclude(true)
         .git_global(true)

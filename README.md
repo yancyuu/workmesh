@@ -117,10 +117,16 @@ Events form an append-only DAG per device and synchronize with the same object p
 
 ## Git compatibility
 
-- `aigit init` adds `.aigit/` to `.git/info/exclude`; it does not modify tracked files.
-- Checkpoints record the current `git HEAD` when a Git repository exists.
-- `aigit` never runs mutations against Git and never copies `.git`.
-- Use Git normally for commits, reviews, and merges.
+`aigit` treats Git as a read-only external system:
+
+- The only Git command it runs is `git rev-parse HEAD` to annotate checkpoints.
+- It never creates commits, branches, tags, stashes, hooks, or refs.
+- It never stages files, changes the index, checks out, rebases, resets, or pushes.
+- It never copies or synchronizes `.git`; Git history remains wherever you put it.
+- `aigit init` adds `.aigit/` to `.git/info/exclude` so its local state cannot be committed accidentally. This does not change tracked files or Git history.
+- Checkpoints can include uncommitted and untracked files, but storing them never changes Git state.
+- After synchronization, use `git status` and `git diff` exactly as before. Divergent offline work remains in `aigit` history until you resolve it with your normal Git workflow.
+- `.gitignore` is respected. Put `aigit`-only exclusions in `.aigitignore`; there is no need to modify `.gitignore` for `aigit`.
 
 ## Transport and privacy
 
