@@ -12,7 +12,7 @@ use crate::store::Store;
 
 #[derive(Debug, Parser)]
 #[command(
-    name = "aigit",
+    name = "workmesh",
     version,
     about = "Local-first P2P checkpoints for agent work",
     arg_required_else_help = true
@@ -29,7 +29,7 @@ enum Command {
         #[arg(long)]
         direct_only: bool,
     },
-    /// Join a workspace using the ticket printed by `aigit share`.
+    /// Join a workspace using the ticket printed by `workmesh share`.
     Join {
         ticket: String,
         #[arg(long, default_value = ".")]
@@ -56,7 +56,7 @@ enum Command {
         #[arg(long)]
         events: bool,
     },
-    /// Initialize manually; `aigit share` also does this automatically.
+    /// Initialize manually; `workmesh share` also does this automatically.
     #[command(hide = true)]
     Init,
     /// Capture the current files and agent intent without creating a Git commit.
@@ -125,7 +125,7 @@ pub async fn run(cli: Cli) -> Result<()> {
     match cli.command {
         Command::Init => {
             let store = Store::init(&current)?;
-            println!("Initialized aigit in {}", store.root().display());
+            println!("Initialized workmesh in {}", store.root().display());
             println!("Repository: {}", store.config().repo_id);
             println!("Device: {}", store.config().device_id);
             Ok(())
@@ -168,7 +168,7 @@ pub async fn run(cli: Cli) -> Result<()> {
             store.save_config()?;
             let report = result?;
             print_report(&report);
-            println!("Run `aigit start` on both machines for automatic synchronization.");
+            println!("Run `workmesh start` on both machines for automatic synchronization.");
             Ok(())
         }
         Command::Join { ticket, target } => {
@@ -182,7 +182,7 @@ pub async fn run(cli: Cli) -> Result<()> {
             store.set_local_head(&ticket.checkpoint)?;
             print_report(&report);
             println!("Materialized {files} files in {}", store.root().display());
-            println!("Run `aigit start` on both machines for automatic synchronization.");
+            println!("Run `workmesh start` on both machines for automatic synchronization.");
             Ok(())
         }
         Command::Start { interval_secs } => {
@@ -357,7 +357,7 @@ pub async fn run(cli: Cli) -> Result<()> {
 }
 
 fn open_or_init(root: &Path) -> Result<Store> {
-    if root.join(".aigit/config.json").is_file() {
+    if root.join(".workmesh/config.json").is_file() {
         Store::open(root)
     } else {
         Store::init(root)
@@ -369,7 +369,7 @@ fn ensure_join_target(target: &PathBuf) -> Result<()> {
         return Ok(());
     }
     for entry in fs::read_dir(target).with_context(|| format!("reading {}", target.display()))? {
-        if entry?.file_name() != ".aigit" {
+        if entry?.file_name() != ".workmesh" {
             bail!("join target must be new or empty: {}", target.display());
         }
     }

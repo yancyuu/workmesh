@@ -1,8 +1,8 @@
-# aigit
+# WorkMesh
 
-**Local-first, peer-to-peer checkpoints for AI coding work.**
+**A local-first work mesh for AI coding agents.**
 
-`aigit` keeps an independent, content-addressed history of your workspace and agent events beside Git. It never creates Git commits, branches, or tags, never rewrites `.git`, and never syncs Git internals. Two machines pair with one command each, work offline, and synchronize the missing objects whenever they can reach each other again.
+`workmesh` keeps an independent, content-addressed history of your workspace and agent events beside Git. It never creates Git commits, branches, or tags, never rewrites `.git`, and never syncs Git internals. Two machines pair with one command each, work offline, and synchronize the missing objects whenever they can reach each other again.
 
 ## Why
 
@@ -13,21 +13,21 @@ AI coding agents change files in many small steps, explore dead ends, and often 
 - the working state needed to continue the same task on another machine,
 - offline work on two devices that later reconnect.
 
-`aigit` adds that missing local-first layer without replacing Git.
+`workmesh` adds that missing local-first layer without replacing Git.
 
 ## Install
 
 From source:
 
 ```bash
-cargo install --git https://github.com/yancyuu/aigit.git
+cargo install --git https://github.com/yancyuu/workmesh.git
 ```
 
 Or clone and build:
 
 ```bash
-git clone https://github.com/yancyuu/aigit.git
-cd aigit
+git clone https://github.com/yancyuu/workmesh.git
+cd workmesh
 cargo install --path .
 ```
 
@@ -39,20 +39,20 @@ On the machine that currently has the project:
 
 ```bash
 cd ~/work/my-project
-aigit share
+workmesh share
 ```
 
-`share` initializes `aigit` if needed, captures the current workspace, and prints a one-time command such as:
+`share` initializes `workmesh` if needed, captures the current workspace, and prints a one-time command such as:
 
 ```text
-aigit join eyJ2ZXJzaW9uIjox...
+workmesh join eyJ2ZXJzaW9uIjox...
 ```
 
 On the other machine:
 
 ```bash
 mkdir ~/work/my-project && cd ~/work/my-project
-aigit join eyJ2ZXJzaW9uIjox... --target .
+workmesh join eyJ2ZXJzaW9uIjox... --target .
 ```
 
 The second machine receives the workspace snapshot, checkpoint history, and agent event history. Git metadata is intentionally not copied; the original Git repository remains untouched.
@@ -60,20 +60,20 @@ The second machine receives the workspace snapshot, checkpoint history, and agen
 For automatic checkpoints and reconnection on both machines:
 
 ```bash
-aigit start
+workmesh start
 ```
 
 Check state with:
 
 ```bash
-aigit status
-aigit sync
+workmesh status
+workmesh sync
 ```
 
 Stop the background daemon with:
 
 ```bash
-aigit stop
+workmesh stop
 ```
 
 ## Commands
@@ -82,24 +82,24 @@ Daily commands:
 
 | Command | Purpose |
 |---|---|
-| `aigit share` | Initialize if needed, checkpoint, print a one-time join ticket, and serve one peer |
-| `aigit join` | Pair, synchronize, and materialize a shared workspace |
-| `aigit start` | Start automatic checkpoints and background synchronization |
-| `aigit stop` | Stop the background daemon |
-| `aigit sync` | Exchange all missing objects with paired peers now |
-| `aigit status` | Show workspace, peers, synchronization times, and daemon state |
-| `aigit log` | Show checkpoint history; `--events` shows the agent event DAG |
+| `workmesh share` | Initialize if needed, checkpoint, print a one-time join ticket, and serve one peer |
+| `workmesh join` | Pair, synchronize, and materialize a shared workspace |
+| `workmesh start` | Start automatic checkpoints and background synchronization |
+| `workmesh stop` | Stop the background daemon |
+| `workmesh sync` | Exchange all missing objects with paired peers now |
+| `workmesh status` | Show workspace, peers, synchronization times, and daemon state |
+| `workmesh log` | Show checkpoint history; `--events` shows the agent event DAG |
 
 Advanced commands remain available for scripts and harnesses:
 
 | Command | Purpose |
 |---|---|
-| `aigit init` | Initialize manually; `share` does this automatically |
-| `aigit checkpoint` | Capture all current files with optional intent, note, and agent |
-| `aigit record` | Append a prompt, tool call, decision, test result, or note |
-| `aigit serve` | Continuously accept paired peers in the foreground |
-| `aigit export` | Materialize a checkpoint into a new or empty directory |
-| `aigit daemon run/start/stop/status` | Low-level daemon controls |
+| `workmesh init` | Initialize manually; `share` does this automatically |
+| `workmesh checkpoint` | Capture all current files with optional intent, note, and agent |
+| `workmesh record` | Append a prompt, tool call, decision, test result, or note |
+| `workmesh serve` | Continuously accept paired peers in the foreground |
+| `workmesh export` | Materialize a checkpoint into a new or empty directory |
+| `workmesh daemon run/start/stop/status` | Low-level daemon controls |
 
 ## Offline and shutdown semantics
 
@@ -107,38 +107,38 @@ Every checkpoint is complete on the local machine before synchronization. If the
 
 1. local work continues,
 2. new objects wait in the local object store,
-3. the next `aigit sync` or daemon cycle exchanges only missing objects,
+3. the next `workmesh sync` or daemon cycle exchanges only missing objects,
 4. both histories are preserved as parallel checkpoint branches.
 
-Nothing can retrieve data that exists only on a powered-off machine. For higher availability, run `aigit start` on an always-on NAS, home server, or work machine as another equal peer. No machine has special authority.
+Nothing can retrieve data that exists only on a powered-off machine. For higher availability, run `workmesh start` on an always-on NAS, home server, or work machine as another equal peer. No machine has special authority.
 
-If both machines changed the same workspace while offline, both checkpoint histories synchronize and both working directories remain untouched. Use `aigit log`, `aigit export`, and your normal Git workflow to resolve the changes. `aigit` only fast-forwards a working directory when it is clean relative to its last checkpoint and the peer checkpoint is a descendant.
+If both machines changed the same workspace while offline, both checkpoint histories synchronize and both working directories remain untouched. Use `workmesh log`, `workmesh export`, and your normal Git workflow to resolve the changes. `workmesh` only fast-forwards a working directory when it is clean relative to its last checkpoint and the peer checkpoint is a descendant.
 
 ## Agent events
 
 Agents or harness hooks can record durable context without creating commits:
 
 ```bash
-aigit record --kind prompt --agent claude-code --text "Refactor retry handling"
-aigit record --kind tool --agent claude-code --text "ran cargo test -p storage"
-aigit record --kind decision --text "Use exponential backoff without jitter"
-aigit log --events
+workmesh record --kind prompt --agent claude-code --text "Refactor retry handling"
+workmesh record --kind tool --agent claude-code --text "ran cargo test -p storage"
+workmesh record --kind decision --text "Use exponential backoff without jitter"
+workmesh log --events
 ```
 
 Events form an append-only DAG per device and synchronize with the same object protocol as checkpoints.
 
 ## Git compatibility
 
-`aigit` treats Git as a read-only external system:
+`workmesh` treats Git as a read-only external system:
 
 - The only Git command it runs is `git rev-parse HEAD` to annotate checkpoints.
 - It never creates commits, branches, tags, stashes, hooks, or refs.
 - It never stages files, changes the index, checks out, rebases, resets, or pushes.
 - It never copies or synchronizes `.git`; Git history remains wherever you put it.
-- `aigit init` adds `.aigit/` to `.git/info/exclude` so its local state cannot be committed accidentally. This does not change tracked files or Git history.
+- `workmesh init` adds `.workmesh/` to `.git/info/exclude` so its local state cannot be committed accidentally. This does not change tracked files or Git history.
 - Checkpoints can include uncommitted and untracked files, but storing them never changes Git state.
-- After synchronization, use `git status` and `git diff` exactly as before. Divergent offline work remains in `aigit` history until you resolve it with your normal Git workflow.
-- `.gitignore` is respected. Put `aigit`-only exclusions in `.aigitignore`; there is no need to modify `.gitignore` for `aigit`.
+- After synchronization, use `git status` and `git diff` exactly as before. Divergent offline work remains in `workmesh` history until you resolve it with your normal Git workflow.
+- `.gitignore` is respected. Put `workmesh`-only exclusions in `.workmeshignore`; there is no need to modify `.gitignore` for `workmesh`.
 
 ## Transport and privacy
 
@@ -147,19 +147,19 @@ Networking uses [iroh](https://iroh.computer) encrypted QUIC connections identif
 For LAN, Tailscale, or zero-third-party deployments, use direct-only mode:
 
 ```bash
-aigit share --direct-only
-aigit serve --direct-only
-aigit sync --direct-only
+workmesh share --direct-only
+workmesh serve --direct-only
+workmesh sync --direct-only
 ```
 
 Direct-only mode disables relays and address lookup. The listen port is persisted per workspace so a restarted machine remains reachable at the same address. Both devices need direct reachability.
 
-Potential secrets such as `.env`, private keys, and common credential files are skipped by default. Skipped paths are printed. `.gitignore` and `.aigitignore` are respected.
+Potential secrets such as `.env`, private keys, and common credential files are skipped by default. Skipped paths are printed. `.gitignore` and `.workmeshignore` are respected.
 
 ## Repository layout
 
 ```text
-.aigit/
+.workmesh/
 ├── config.json       # device identity, endpoint secret, peers
 ├── objects/          # BLAKE3 content-addressed blobs and JSON objects
 ├── refs/heads/       # per-device checkpoint heads
@@ -174,7 +174,7 @@ Object integrity is verified with BLAKE3 when objects are written and again when
 
 - Checkpoints are workspace snapshots, not Git history or Git LFS replacements.
 - There is no automatic semantic code merge; divergent work stays as parallel histories.
-- Agent adapters are not bundled. Harnesses can call `aigit checkpoint` and `aigit record`.
+- Agent adapters are not bundled. Harnesses can call `workmesh checkpoint` and `workmesh record`.
 - Direct-only mode requires stable reachability; default relay mode is more resilient across NATs.
 - Windows daemon management uses process termination commands and is not yet tested.
 

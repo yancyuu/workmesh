@@ -26,9 +26,9 @@ impl Store {
     pub fn init(root: &Path) -> Result<Self> {
         let root = absolute(root)?;
         fs::create_dir_all(&root).with_context(|| format!("creating {}", root.display()))?;
-        let state = root.join(".aigit");
+        let state = root.join(".workmesh");
         if state.join("config.json").exists() {
-            bail!("aigit is already initialized in {}", root.display());
+            bail!("workmesh is already initialized in {}", root.display());
         }
         fs::create_dir_all(state.join("objects"))?;
         fs::create_dir_all(state.join("refs/heads"))?;
@@ -58,15 +58,15 @@ impl Store {
 
     pub fn open(root: &Path) -> Result<Self> {
         let root = absolute(root)?;
-        let state = root.join(".aigit");
+        let state = root.join(".workmesh");
         let bytes = fs::read(state.join("config.json")).with_context(|| {
             format!(
-                "no aigit repository at {}; run aigit init first",
+                "no workmesh repository at {}; run workmesh init first",
                 root.display()
             )
         })?;
         let config: Config =
-            serde_json::from_slice(&bytes).context("invalid .aigit/config.json")?;
+            serde_json::from_slice(&bytes).context("invalid .workmesh/config.json")?;
         if config.version != FORMAT_VERSION {
             bail!("unsupported repository format: {}", config.version);
         }
@@ -257,7 +257,7 @@ impl Store {
             created_at: Utc::now(),
             intent: None,
             note: Some("automatic workspace checkpoint".to_owned()),
-            agent: Some("aigit-daemon".to_owned()),
+            agent: Some("workmesh-daemon".to_owned()),
             git_head: git_head(&self.root),
             manifest: capture.manifest_hash,
         };
@@ -431,12 +431,12 @@ impl Store {
         fs::create_dir_all(&info)?;
         let exclude = info.join("exclude");
         let existing = fs::read_to_string(&exclude).unwrap_or_default();
-        if !existing.lines().any(|line| line.trim() == ".aigit/") {
+        if !existing.lines().any(|line| line.trim() == ".workmesh/") {
             let mut updated = existing;
             if !updated.is_empty() && !updated.ends_with('\n') {
                 updated.push('\n');
             }
-            updated.push_str(".aigit/\n");
+            updated.push_str(".workmesh/\n");
             atomic_write(&exclude, updated.as_bytes())?;
         }
         Ok(())
@@ -468,7 +468,7 @@ fn absolute(path: &Path) -> Result<PathBuf> {
 fn atomic_write(path: &Path, bytes: &[u8]) -> Result<()> {
     let parent = path.parent().context("file has no parent directory")?;
     fs::create_dir_all(parent)?;
-    let temporary = parent.join(format!(".aigit-tmp-{}", Uuid::new_v4().simple()));
+    let temporary = parent.join(format!(".workmesh-tmp-{}", Uuid::new_v4().simple()));
     fs::write(&temporary, bytes).with_context(|| format!("writing {}", temporary.display()))?;
     fs::rename(&temporary, path).with_context(|| format!("replacing {}", path.display()))?;
     Ok(())

@@ -23,7 +23,7 @@ pub fn run(root: &Path, interval: Duration) -> Result<()> {
     fs::create_dir_all(&state)?;
     let lock = File::create(state.join("daemon.lock")).context("create daemon lock")?;
     lock.try_lock_exclusive()
-        .context("another aigit daemon already runs for this workspace")?;
+        .context("another workmesh daemon already runs for this workspace")?;
     write_status(&state, &store)?;
     let result = tokio::runtime::Handle::try_current();
     let outcome = match result {
@@ -45,10 +45,10 @@ pub fn start(root: &Path, interval: Duration) -> Result<()> {
     if let Some(status) = read_status(&state)
         && is_running(status.pid)
     {
-        bail!("aigit daemon is already running (pid {})", status.pid);
+        bail!("workmesh daemon is already running (pid {})", status.pid);
     }
     fs::remove_file(state.join("daemon.status")).ok();
-    let executable = std::env::current_exe().context("locate aigit executable")?;
+    let executable = std::env::current_exe().context("locate workmesh executable")?;
     let log = OpenOptions::new()
         .create(true)
         .append(true)
@@ -69,7 +69,7 @@ pub fn start(root: &Path, interval: Duration) -> Result<()> {
         use std::os::unix::process::CommandExt;
         command.process_group(0);
     }
-    let child = command.spawn().context("spawn aigit daemon")?;
+    let child = command.spawn().context("spawn workmesh daemon")?;
     let pid = child.id();
     drop(child);
     let deadline = Instant::now() + Duration::from_secs(15);
@@ -79,7 +79,7 @@ pub fn start(root: &Path, interval: Duration) -> Result<()> {
             && is_running(pid)
         {
             println!(
-                "Started aigit daemon (pid {pid}). Log: {}",
+                "Started workmesh daemon (pid {pid}). Log: {}",
                 state.join("daemon.log").display()
             );
             return Ok(());
@@ -96,7 +96,7 @@ pub fn stop(root: &Path) -> Result<()> {
     let store = Store::open(root)?;
     let state = store.state_dir().to_path_buf();
     let Some(status) = read_status(&state) else {
-        println!("No aigit daemon is running.");
+        println!("No workmesh daemon is running.");
         return Ok(());
     };
     if !is_running(status.pid) {
@@ -109,14 +109,14 @@ pub fn stop(root: &Path) -> Result<()> {
     while Instant::now() < deadline {
         if !is_running(status.pid) {
             fs::remove_file(state.join("daemon.status")).ok();
-            println!("Stopped aigit daemon (pid {}).", status.pid);
+            println!("Stopped workmesh daemon (pid {}).", status.pid);
             return Ok(());
         }
         std::thread::sleep(Duration::from_millis(100));
     }
     signal(status.pid, true)?;
     fs::remove_file(state.join("daemon.status")).ok();
-    println!("Force-stopped aigit daemon (pid {}).", status.pid);
+    println!("Force-stopped workmesh daemon (pid {}).", status.pid);
     Ok(())
 }
 
@@ -138,7 +138,7 @@ pub fn status(root: &Path) -> Result<()> {
 }
 
 pub fn log_path(root: &Path) -> PathBuf {
-    root.join(".aigit/daemon.log")
+    root.join(".workmesh/daemon.log")
 }
 
 fn write_status(state: &Path, store: &Store) -> Result<()> {

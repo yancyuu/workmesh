@@ -39,7 +39,7 @@ pub async fn share(store: &mut Store, direct_only: bool) -> Result<SyncReport> {
         direct_only,
     };
     let encoded = encode_ticket(&ticket)?;
-    println!("aigit join {encoded}");
+    println!("workmesh join {encoded}");
     println!("Waiting for one peer; press Ctrl-C to cancel.");
     let report = accept_loop(store, &endpoint, direct_only, true).await;
     endpoint.close().await;

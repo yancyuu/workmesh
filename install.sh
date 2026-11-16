@@ -6,5 +6,5 @@ command -v cargo >/dev/null 2>&1 || {
   exit 1
 }
 
-cargo install --git https://github.com/yancyuu/aigit.git --locked
-echo "Installed $(aigit --version). Try: aigit init"
+cargo install --git https://github.com/yancyuu/workmesh.git --locked
+echo "Installed $(workmesh --version). Try: workmesh init"

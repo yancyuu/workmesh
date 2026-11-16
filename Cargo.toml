@@ -1,11 +1,11 @@
 [package]
-name = "aigit"
+name = "workmesh"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.93"
-description = "Local-first, Git-compatible P2P checkpoints for agent work"
+description = "Local-first P2P workspace mesh for AI coding agents"
 license = "Apache-2.0"
-repository = "https://github.com/yancyuu/aigit"
+repository = "https://github.com/yancyuu/workmesh"
 keywords = ["git", "ai", "p2p", "local-first", "agents"]
 categories = ["command-line-utilities", "development-tools"]
 

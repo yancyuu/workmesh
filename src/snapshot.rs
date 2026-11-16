@@ -23,7 +23,7 @@ pub fn capture(store: &Store) -> Result<Capture> {
     let mut skipped = Vec::new();
     let walker = WalkBuilder::new(&root)
         .hidden(false)
-        .add_custom_ignore_filename(".aigitignore")
+        .add_custom_ignore_filename(".workmeshignore")
         .git_ignore(true)
         .git_exclude(true)
         .git_global(true)
@@ -102,7 +102,7 @@ pub fn materialize_empty(store: &Store, checkpoint_hash: &str, target: &Path) ->
             fs::read_dir(target).with_context(|| format!("reading {}", target.display()))?
         {
             let entry = entry?;
-            if entry.file_name() != ".aigit" {
+            if entry.file_name() != ".workmesh" {
                 bail!("target directory is not empty: {}", target.display());
             }
         }
@@ -231,7 +231,7 @@ fn materialize(
             let temporary = destination
                 .parent()
                 .unwrap_or(target)
-                .join(format!(".aigit-tmp-{}", Uuid::new_v4().simple()));
+                .join(format!(".workmesh-tmp-{}", Uuid::new_v4().simple()));
             fs::write(&temporary, bytes)
                 .with_context(|| format!("writing {}", temporary.display()))?;
             fs::rename(&temporary, &destination)
