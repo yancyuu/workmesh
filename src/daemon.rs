@@ -177,10 +177,10 @@ fn is_running(pid: u32) -> bool {
     }
 }
 
-fn signal(pid: u32, force: bool) -> Result<()> {
+fn signal(pid: u32, _force: bool) -> Result<()> {
     #[cfg(unix)]
     {
-        let argument = if force { "-9" } else { "-15" };
+        let argument = if _force { "-9" } else { "-15" };
         Command::new("kill")
             .args([argument, &pid.to_string()])
             .status()
