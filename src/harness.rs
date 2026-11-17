@@ -75,6 +75,7 @@ pub struct RunReport {
     pub stop_reason: Option<String>,
     pub notifications: usize,
     pub permission_requests_cancelled: usize,
+    pub task_receipt: Option<String>,
 }
 
 pub fn check(
@@ -93,6 +94,7 @@ pub fn prompt(
     cwd: PathBuf,
     prompt: String,
     seconds: u64,
+    task_id: Option<&str>,
 ) -> Result<RunReport> {
     if prompt.trim().is_empty() || prompt.len() > 64 * 1024 {
         bail!("prompt must be non-empty and at most 64 KiB");
@@ -101,7 +103,13 @@ pub fn prompt(
     if !cwd.is_dir() {
         bail!("working directory must be a directory");
     }
-    execute(name, executable, args, Some(cwd), Some(prompt), seconds)
+    let mut report = execute(name, executable, args, Some(cwd), Some(prompt), seconds)?;
+
+    if let Some(id) = task_id {
+        let receipt_id = write_task_receipt(id, &report, name)?;
+        report.task_receipt = Some(receipt_id);
+    }
+    Ok(report)
 }
 
 fn execute(
@@ -146,6 +154,7 @@ fn execute(
         stop_reason: None,
         notifications: 0,
         permission_requests_cancelled: 0,
+        task_receipt: None,
     }));
     let notifications = report.clone();
     let permissions = report.clone();
@@ -253,4 +262,47 @@ fn executable(path: &Path) -> bool {
     {
         true
     }
+}
+
+fn write_task_receipt(task_id: &str, report: &RunReport, harness_name: &str) -> Result<String> {
+    use crate::tasks::model::Receipt;
+    use crate::tasks::store::Ledger;
+
+    let mut ledger = Ledger::open()?;
+    let view = ledger.view(task_id)?;
+    let mut task = view.task.clone();
+
+    task.harness = Some(harness_name.to_string());
+    if let Some(session) = &report.session {
+        task.session = Some(session.clone());
+    }
+
+    let stop = report.stop_reason.as_deref().unwrap_or("unknown");
+    let session_ref = report.session.as_deref().unwrap_or("no-session");
+    let summary = format!("ACP run completed; stop_reason={stop}");
+    let evidence = format!(
+        "harness={harness_name} session={session_ref} notifications={} permission_denials={}",
+        report.notifications, report.permission_requests_cancelled
+    );
+
+    task.summary = summary.clone();
+    task.evidence = vec![evidence.clone()];
+    if let Some(agent_info) = &report.agent
+        && let Some(agent_name) = agent_info.get("name").and_then(|v| v.as_str())
+    {
+        task.harness = Some(agent_name.to_string());
+    }
+
+    let receipt = Receipt {
+        summary,
+        next: if task.next.is_empty() {
+            "Review agent output and update next step".to_string()
+        } else {
+            task.next.clone()
+        },
+        evidence: vec![evidence],
+    };
+
+    let updated = ledger.update(&view.revision, task, "acp_run", Some(receipt))?;
+    Ok(updated.revision)
 }

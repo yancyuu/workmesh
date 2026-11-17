@@ -119,6 +119,8 @@ enum HarnessCmd {
         cwd: PathBuf,
         #[arg(long)]
         text: String,
+        #[arg(long)]
+        task: Option<String>,
         #[arg(long, default_value_t = 300)]
         timeout: u64,
     },
@@ -387,10 +389,11 @@ pub fn run(cli: Cli) -> Result<()> {
                 arg,
                 cwd,
                 text,
+                task,
                 timeout,
             } => emit(
                 json,
-                &crate::harness::prompt(&name, command, arg, cwd, text, timeout)?,
+                &crate::harness::prompt(&name, command, arg, cwd, text, timeout, task.as_deref())?,
             ),
         },
     }
