@@ -1,266 +1,189 @@
 # WorkMesh
 
-**A local-first work mesh for AI coding agents.**
+**Terminal-first task attention ledger for work across projects, machines, and AI agents.**
 
-`workmesh` keeps an independent, content-addressed history of your workspace and agent events beside Git. It never creates Git commits, branches, or tags, never rewrites `.git`, and never syncs Git internals. Two machines pair with one command each, work offline, and synchronize the missing objects whenever they can reach each other again.
+WorkMesh answers one question: *across all your projects and agent sessions, what needs attention right now, and what is the next step?*
 
-## Why
+It does **not** replace Git, sync code directories, run agents, or require an account.
 
-AI coding agents change files in many small steps, explore dead ends, and often work on machines that are not always online. Git remains the system of record for reviewed code, but it does not capture:
-
-- which prompt or tool call changed a file,
-- the workspace state before an agent's edit,
-- the working state needed to continue the same task on another machine,
-- offline work on two devices that later reconnect.
-
-`workmesh` adds that missing local-first layer without replacing Git.
-
-## Agent skill
-
-Coding agents should read [skills/workmesh/SKILL.md](skills/workmesh/SKILL.md) before operating WorkMesh. It contains the supported command flows, pairing authorization rules, Git boundaries, and failure recovery procedures.
-
-To install it for a compatible agent, copy `skills/workmesh/` into that agent's skill directory (for example, a project's `.agents/skills/workmesh/` or `.claude/skills/workmesh/`). If the agent does not support skill discovery, ask it to read the file directly. The skill does not install WorkMesh or grant permission to share data.
+```
+Git          → code history, branches, diffs, merges
+Harness      → agent sessions, prompts, tools, permissions
+WorkMesh     → task attention, original ideas, agent receipts, next steps
+```
 
 ## Install
 
-From source:
+```bash
+cargo install --git https://github.com/yancyuu/workmesh.git --locked
+```
+
+Requires Rust 1.93+.
+
+## Quick start
 
 ```bash
-cargo install --git https://github.com/yancyuu/workmesh.git
+# Register a project
+workmesh project add myapp --path ~/code/myapp
+
+# Capture a raw idea, question, bug, or request — it is not executed
+workmesh capture "Login page feels slow on mobile" --kind bug --project myapp
+
+# See what needs attention
+workmesh now
+
+# Start a direction
+workmesh task add "Improve mobile login performance" \
+  --project myapp --kind feature --priority 1 \
+  --goal "Reduce perceived load time below 1s"
+
+# Record meaningful agent progress
+workmesh task receipt <task-id> \
+  --summary "Identified render-blocking font as bottleneck" \
+  --next "Implement font-display:swap and re-test" \
+  --evidence "Lighthouse mobile score improved from 42 to 58"
+
+# Hand off to another machine, agent, or harness
+workmesh task handoff <task-id>
 ```
 
-Or clone and build:
+## Core concepts
+
+| Object | What it is | Not |
+|---|---|---|
+| Capture | Your original words, preserved exactly | An execution instruction |
+| Direction | A goal you're actively pushing forward | A subtask tree |
+| Proposal | An agent's suggestion to group captures | An automatic action |
+| Receipt | A meaningful progress record with evidence | A tool-call log |
+| Handoff | Context for the next session to continue | A session migration |
+
+## Attention views
 
 ```bash
-git clone https://github.com/yancyuu/workmesh.git
-cd workmesh
-cargo install --path .
+workmesh now        # What matters right now (default)
+workmesh inbox      # Unprocessed captures
+workmesh blocked    # Why things stopped
+workmesh stale      # No update in N days
+workmesh needs-me   # Decisions waiting for you
 ```
 
-Requires Rust 1.93 or newer.
+Every item shows **why it's in this view**, **when it was last reported**, **by which machine**, and **what the next step is**.
 
-## Two-machine quick start
+## Agent integration
 
-On the machine that currently has the project:
+WorkMesh uses the [Agent Client Protocol (ACP)](https://agentclientprotocol.com) to connect to local coding agents via their adapters. It never downloads, installs, or authenticates agents for you.
 
 ```bash
-cd ~/work/my-project
-workmesh share
+# Detect installed adapters (does not execute them)
+workmesh harness list
+
+# Verify ACP handshake with a specific adapter
+workmesh harness check codex --command /path/to/codex-acp
+
+# Run a prompt and link the result to a task
+workmesh harness prompt claude \
+  --command /path/to/claude-agent-acp \
+  --cwd ~/code/myapp \
+  --text "Continue improving mobile login" \
+  --task <task-id> \
+  --timeout 300
 ```
 
-`share` initializes `workmesh` if needed, captures the current workspace, and prints a one-time command such as:
+After the ACP session, WorkMesh writes a receipt to the task with the harness name, session ID, stop reason, and evidence. Permissions are **cancelled by default** — WorkMesh never auto-approves tool calls.
 
-```text
-workmesh join eyJ2ZXJzaW9uIjox...
-```
+### Supported via ACP adapters
 
-On the other machine:
+| Agent | Adapter | Install separately |
+|---|---|---|
+| Claude Code | `claude-agent-acp` | `npm i -g @agentclientprotocol/claude-agent-acp` |
+| Codex | `codex-acp` | `npm i -g @agentclientprotocol/codex-acp` |
+| Pi | `pi-acp` | Build from [regadas/pi-acp](https://github.com/regadas/pi-acp) |
+| OpenCode | `opencode acp` | `npm i -g opencode-ai` |
+
+## Multi-machine sync
+
+WorkMesh syncs task records only — never code, never credentials.
 
 ```bash
-mkdir ~/work/my-project && cd ~/work/my-project
-workmesh join eyJ2ZXJzaW9uIjox... --target .
+# Export a bundle
+workmesh ledger export --output mesh.json
+
+# Import on another machine
+workmesh ledger import mesh.json
+
+# Or sync via SSH (requires workmesh on remote)
+workmesh ledger sync --ssh user@remote-host
 ```
 
-The second machine receives the workspace snapshot, checkpoint history, and agent event history. Git metadata is intentionally not copied; the original Git repository remains untouched.
+Concurrent edits to the same task from different machines create a visible conflict, never a silent overwrite. Use `workmesh task resolve <id> --choose <revision>` to pick the correct version.
 
-For automatic checkpoints and reconnection on both machines:
+## Optional web UI
+
+The CLI is the primary interface. A local web UI is available as an optional plugin.
 
 ```bash
-workmesh start
+# Install from source repository
+workmesh ui install
+
+# Start (opens browser automatically)
+workmesh ui
+
+# Or with specific settings
+workmesh ui start --port 8477 --no-open
+
+# Check status
+workmesh ui status
+
+# Remove UI (task data is never deleted)
+workmesh ui uninstall
 ```
 
-Check state with:
+The UI binds to `127.0.0.1` only, uses a random session token in the URL fragment, and enforces CSP headers.
+
+## Task lifecycle
+
+```
+Inbox → Ready → Active → Waiting → Done
+         ↓        ↓
+       Blocked  Blocked
+```
+
+- **Active** requires `--next` (a concrete next step)
+- **Blocked** requires `--blocker` (why it stopped)
+- **Done** requires `--summary` and `--evidence`
+- Default WIP limit: 3 active tasks (configurable)
 
 ```bash
-workmesh status
-workmesh sync
+# Configure
+workmesh config --machine home-mac --wip 5
 ```
 
-Stop the background daemon with:
+## Git boundary
+
+WorkMesh is read-only with respect to Git:
+- Observes `git rev-parse HEAD` and current branch for context
+- Never creates commits, branches, tags, or stashes
+- Never stages files, checks out, rebases, resets, or pushes
+- Never copies `.git` or synchronizes working directories
+
+## Agent skill
+
+Coding agents should read [skills/workmesh/SKILL.md](skills/workmesh/SKILL.md) before using WorkMesh. Install it into your agent's skill directory:
 
 ```bash
-workmesh stop
+mkdir -p .claude/skills
+cp -R skills/workmesh .claude/skills/
 ```
-
-## Sharing a pairing ticket
-
-The default workflow is to copy the printed one-line command from one terminal to the other:
-
-```bash
-workmesh join eyJ2ZXJzaW9uIjox...
-```
-
-For a file-based transfer over `scp`, AirDrop, a password manager, or another encrypted channel:
-
-```bash
-# Machine A
-workmesh share --ticket-out /tmp/workmesh-ticket
-
-# Machine B
-mkdir ~/work/my-project && cd ~/work/my-project
-workmesh join --ticket-file /tmp/workmesh-ticket --target .
-rm /tmp/workmesh-ticket
-```
-
-The ticket file is created with owner-only permissions and contains only the ticket, not workspace data. Delete it after use.
-
-When the other device is nearby, render a QR code in the terminal:
-
-```bash
-workmesh share --qr
-```
-
-The QR code encodes the complete `workmesh join ...` command. Scan it only over a trusted path: a ticket is a bearer invitation until it expires or is redeemed.
-
-## Keys, pairing, and recovery
-
-You do not create, remember, or type a password.
-
-- A pairing ticket is valid for one successful join and expires after ten minutes.
-- When someone redeems the ticket, the machine running `workmesh share` shows the requesting device name, device ID, and endpoint ID, then asks for confirmation.
-- Only after you answer `y` can that device join.
-- For scripts and automation, `workmesh share --yes` skips this interactive confirmation; use it only where the ticket channel is trusted.
-- After `join` succeeds, both devices rotate the one-time ticket into a saved peer credential in `.workmesh/config.json`.
-- Later `workmesh sync`, `workmesh start`, and incoming peer connections use those saved credentials automatically.
-- The ticket is not needed again after pairing and cannot be reused after a successful join.
-- If a ticket expires before it is used, run `workmesh share` again on an already-paired device.
-
-A ticket is still a bearer credential before redemption: anyone who has it can request to join. Send tickets only over a channel you trust, and reject the confirmation prompt if an unexpected device name or endpoint ID appears.
-
-To add or recover a machine, use any surviving paired machine:
-
-```bash
-# On a machine that still has .workmesh/
-workmesh stop
-workmesh share
-
-# On the new or recovered machine
-workmesh join <new-ticket> --target .
-```
-
-If a device is lost or no longer trusted:
-
-```bash
-workmesh stop
-workmesh status           # copy the full endpoint ID shown as Peer <id>
-workmesh unpair <endpoint-id>
-workmesh start
-```
-
-Run `workmesh unpair` on every surviving trusted device. There is intentionally no hosted account service that can recover or revoke keys globally. Keep at least one always-on trusted peer, such as a home server or NAS, or keep an encrypted backup of `.workmesh/` if losing every device would be unacceptable.
-
-## Commands
-
-Daily commands:
-
-| Command | Purpose |
-|---|---|
-| `workmesh share` | Initialize if needed, checkpoint, print a one-time join ticket, confirm the joining device, and serve one peer; supports `--ticket-out` and `--qr` |
-| `workmesh join` | Pair, synchronize, and materialize a shared workspace; accepts a positional ticket or `--ticket-file` |
-| `workmesh start` | Start automatic checkpoints and background synchronization |
-| `workmesh stop` | Stop the background daemon |
-| `workmesh sync` | Exchange all missing objects with paired peers now |
-| `workmesh status` | Show workspace, full peer IDs, synchronization times, and daemon state |
-| `workmesh unpair` | Remove a paired device from this machine |
-| `workmesh log` | Show checkpoint history; `--events` shows the agent event DAG |
-
-Advanced commands remain available for scripts and harnesses:
-
-| Command | Purpose |
-|---|---|
-| `workmesh init` | Initialize manually; `share` does this automatically |
-| `workmesh checkpoint` | Capture all current files with optional intent, note, and agent |
-| `workmesh record` | Append a prompt, tool call, decision, test result, or note |
-| `workmesh serve` | Continuously accept paired peers in the foreground |
-| `workmesh export` | Materialize a checkpoint into a new or empty directory |
-| `workmesh daemon run/start/stop/status` | Low-level daemon controls |
-
-## Offline and shutdown semantics
-
-Every checkpoint is complete on the local machine before synchronization. If the other machine is offline:
-
-1. local work continues,
-2. new objects wait in the local object store,
-3. the next `workmesh sync` or daemon cycle exchanges only missing objects,
-4. both histories are preserved as parallel checkpoint branches.
-
-Nothing can retrieve data that exists only on a powered-off machine. For higher availability, run `workmesh start` on an always-on NAS, home server, or work machine as another equal peer. No machine has special authority.
-
-If both machines changed the same workspace while offline, both checkpoint histories synchronize and both working directories remain untouched. Use `workmesh log`, `workmesh export`, and your normal Git workflow to resolve the changes. `workmesh` only fast-forwards a working directory when it is clean relative to its last checkpoint and the peer checkpoint is a descendant.
-
-## Agent events
-
-Agents or harness hooks can record durable context without creating commits:
-
-```bash
-workmesh record --kind prompt --agent claude-code --text "Refactor retry handling"
-workmesh record --kind tool --agent claude-code --text "ran cargo test -p storage"
-workmesh record --kind decision --text "Use exponential backoff without jitter"
-workmesh log --events
-```
-
-Events form an append-only DAG per device and synchronize with the same object protocol as checkpoints.
-
-## Git compatibility
-
-`workmesh` treats Git as a read-only external system:
-
-- The only Git command it runs is `git rev-parse HEAD` to annotate checkpoints.
-- It never creates commits, branches, tags, stashes, hooks, or refs.
-- It never stages files, changes the index, checks out, rebases, resets, or pushes.
-- It never copies or synchronizes `.git`; Git history remains wherever you put it.
-- `workmesh init` adds `.workmesh/` to `.git/info/exclude` so its local state cannot be committed accidentally. This does not change tracked files or Git history.
-- Checkpoints can include uncommitted and untracked files, but storing them never changes Git state.
-- After synchronization, use `git status` and `git diff` exactly as before. Divergent offline work remains in `workmesh` history until you resolve it with your normal Git workflow.
-- `.gitignore` is respected. Put `workmesh`-only exclusions in `.workmeshignore`; there is no need to modify `.gitignore` for `workmesh`.
-
-## Transport and privacy
-
-Networking uses [iroh](https://iroh.computer) encrypted QUIC connections identified by endpoint public keys. By default, iroh may use relay servers for NAT traversal and discovery. Relays only forward already-encrypted traffic and never store repositories.
-
-For LAN, Tailscale, or zero-third-party deployments, use direct-only mode:
-
-```bash
-workmesh share --direct-only
-workmesh serve --direct-only
-workmesh sync --direct-only
-```
-
-Direct-only mode disables relays and address lookup. The listen port is persisted per workspace so a restarted machine remains reachable at the same address. Both devices need direct reachability.
-
-Potential secrets such as `.env`, private keys, and common credential files are skipped by default. Skipped paths are printed. `.gitignore` and `.workmeshignore` are respected.
-
-## Repository layout
-
-```text
-.workmesh/
-├── config.json       # device identity, endpoint secret, peers
-├── objects/          # BLAKE3 content-addressed blobs and JSON objects
-├── refs/heads/       # per-device checkpoint heads
-├── refs/events/      # per-device agent event heads
-├── daemon.log
-└── daemon.status
-```
-
-Object integrity is verified with BLAKE3 when objects are written and again when read. Pairing tickets expire after ten minutes and authenticate both the repository and endpoint identity.
-
-## Current limits
-
-- Checkpoints are workspace snapshots, not Git history or Git LFS replacements.
-- There is no automatic semantic code merge; divergent work stays as parallel histories.
-- Agent adapters are not bundled. Harnesses can call `workmesh checkpoint` and `workmesh record`.
-- Direct-only mode requires stable reachability; default relay mode is more resilient across NATs.
-- Windows daemon management uses process termination commands and is not yet tested.
 
 ## Development
 
 ```bash
-cargo fmt --check
+cargo fmt --all -- --check
 cargo clippy --all-targets -- -D warnings
-cargo test
-cargo run -- init
+cargo test --all
+cargo build --release
 ```
 
 ## License
 
-Apache-2.0. See [LICENSE](LICENSE).
+Apache-2.0
