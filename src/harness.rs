@@ -259,6 +259,7 @@ fn executable(path: &Path) -> bool {
         metadata.permissions().mode() & 0o111 != 0
     }
     #[cfg(not(unix))]
+    #[allow(clippy::needless_bool)]
     {
         true
     }
