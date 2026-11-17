@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>WorkMesh</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">◆</span>
+      <h1>WorkMesh</h1>
+    </div>
+    <nav class="views" role="tablist">
+      <button data-view="now" class="active">现在</button>
+      <button data-view="inbox">收件</button>
+      <button data-view="blocked">阻塞</button>
+      <button data-view="stale">过期</button>
+      <button data-view="needs-me">待我</button>
+    </nav>
+    <div class="search">
+      <input type="search" id="q" placeholder="搜索…" autocomplete="off">
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="summary" id="summary"></section>
+    <section class="items" id="items" aria-live="polite"></section>
+  </main>
+
+  <footer class="statusbar">
+    <span id="sync-status">本地</span>
+    <span id="last-refresh"></span>
+    <button id="refresh" title="刷新">↻</button>
+  </footer>
+
+  <div class="detail-overlay" id="overlay" hidden>
+    <article class="detail" id="detail"></article>
+  </div>
+</div>
+<script src="app.js" type="module"></script>
+</body>
+</html>

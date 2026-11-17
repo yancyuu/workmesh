@@ -1,9 +1,14 @@
-use anyhow::Result;
 use clap::Parser;
+use workmesh::tasks::cli::{Cli, run};
 
-use workmesh::commands::{Cli, run};
-
-#[tokio::main]
-async fn main() -> Result<()> {
-    run(Cli::parse()).await
+fn main() {
+    let json = std::env::args().any(|arg| arg == "--json");
+    if let Err(error) = run(Cli::parse()) {
+        if json {
+            eprintln!("{}", serde_json::json!({"error": format!("{error:#}")}));
+        } else {
+            eprintln!("Error: {error:#}");
+        }
+        std::process::exit(1);
+    }
 }
